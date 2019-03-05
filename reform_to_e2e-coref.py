@@ -19,6 +19,8 @@ import random
 import string
 from time import time
 
+random.seed(1234)
+
 
 def create_doc_key():
     return 'nw%s'%(''.join(random.choices(string.ascii_uppercase + string.digits, k=32)))
@@ -51,16 +53,16 @@ def create_cluster(x):
     A_coref, A_mention, B_coref, B_mention, Pronoun_mention = x
     true_mention = None
     if A_coref:
-        return ((A_mention, Pronoun_mention), (B_mention))
+        return ((A_mention, Pronoun_mention), [(B_mention)])
     elif B_coref:
-        return ((B_mention, Pronoun_mention), (A_mention))
+        return ((B_mention, Pronoun_mention), [(A_mention)])
     else:
         return ([(Pronoun_mention)], [(B_mention)], [(A_mention)])
 
 # In[3]:
 
 
-def reform_for_e2e_coref(filepath):
+def reform_for_e2e_coref(filepath, training=True):
     df = pd.read_csv(filepath, sep='\t')
     
     df['A_mention'] = df[['Text', 'A', 'A-offset']].apply(create_mention_index, axis=1)
@@ -69,8 +71,12 @@ def reform_for_e2e_coref(filepath):
     
     df = df[(df['Pronoun_mention'] != -1) & (df['A_mention'] != -1) & (df['B_mention'] != -1)]
     
-    df['clusters'] = df[['A-coref', 'A_mention', 'B-coref', 'B_mention', 'Pronoun_mention']].apply(create_cluster, axis=1)
-    df['label'] = df[['A-coref', 'B-coref']].apply(lambda x: 0 if x[0] == True else 1 if x[1] == True else 2, axis=1)
+    if training:
+        df['clusters'] = df[['A-coref', 'A_mention', 'B-coref', 'B_mention', 'Pronoun_mention']].apply(create_cluster, axis=1)
+        df['label'] = df[['A-coref', 'B-coref']].apply(lambda x: 0 if x[0] == True else 1 if x[1] == True else 2, axis=1)
+    else:
+        df['clusters'] = [(())]*df.shape[0]
+        df['label'] = [0]*df.shape[0]
     
     reformed = pd.DataFrame()
     reformed['ID'] = df['ID']
@@ -90,6 +96,7 @@ def reform_for_e2e_coref(filepath):
 # In[4]:
 
 
-reform_for_e2e_coref('gap-development.tsv')
-reform_for_e2e_coref('gap-validation.tsv')
-reform_for_e2e_coref('gap-test.tsv')
+#reform_for_e2e_coref('gap-development.tsv')
+#reform_for_e2e_coref('gap-validation.tsv')
+#reform_for_e2e_coref('gap-test.tsv')
+reform_for_e2e_coref('test_stage_1.tsv', training=False)
