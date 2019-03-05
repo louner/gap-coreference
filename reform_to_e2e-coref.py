@@ -51,17 +51,16 @@ def create_cluster(x):
     A_coref, A_mention, B_coref, B_mention, Pronoun_mention = x
     true_mention = None
     if A_coref:
-         true_mention = A_mention
+        return ((A_mention, Pronoun_mention), (B_mention))
+    elif B_coref:
+        return ((B_mention, Pronoun_mention), (A_mention))
     else:
-        true_mention = B_mention
-    return [(true_mention, Pronoun_mention)]
-
+        return ([(Pronoun_mention)], [(B_mention)], [(A_mention)])
 
 # In[3]:
 
 
 def reform_for_e2e_coref(filepath):
-    random.seed(time())
     df = pd.read_csv(filepath, sep='\t')
     
     df['A_mention'] = df[['Text', 'A', 'A-offset']].apply(create_mention_index, axis=1)
@@ -71,8 +70,15 @@ def reform_for_e2e_coref(filepath):
     df = df[(df['Pronoun_mention'] != -1) & (df['A_mention'] != -1) & (df['B_mention'] != -1)]
     
     df['clusters'] = df[['A-coref', 'A_mention', 'B-coref', 'B_mention', 'Pronoun_mention']].apply(create_cluster, axis=1)
+    df['label'] = df[['A-coref', 'B-coref']].apply(lambda x: 0 if x[0] == True else 1 if x[1] == True else 2, axis=1)
     
     reformed = pd.DataFrame()
+    reformed['ID'] = df['ID']
+    reformed['A_mention'] = df['A_mention']
+    reformed['B_mention'] = df['B_mention']
+    reformed['Pronoun_mention'] = df['Pronoun_mention']
+    reformed['label'] = df['label']
+    
     reformed['tmp'] = df['Text'].apply(preprocess)
     reformed['doc_key'] = [create_doc_key() for _ in range(reformed.shape[0])]
     reformed['sentences'] = reformed['tmp'].apply(lambda x: x[0])
@@ -80,9 +86,7 @@ def reform_for_e2e_coref(filepath):
     reformed['clusters'] = df['clusters']
     del reformed['tmp']
     
-    reformed.to_json(filepath.replace('tsv', 'csv'), orient='records', lines=True)
-
-
+    reformed.to_json(filepath.replace('tsv', 'json'), orient='records', lines=True)
 # In[4]:
 
 
