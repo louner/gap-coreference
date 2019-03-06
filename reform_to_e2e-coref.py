@@ -41,7 +41,7 @@ def create_mention_index(x):
             A_tok_count = 0
 
         _text = [c for c in text]
-        _text[offset-len(A):offset] = placeholder
+        _text[offset:offset+len(A)] = placeholder
         _text = ''.join(_text)
         _text = [word for sentence in sent_tokenize(_text) for word in word_tokenize(sentence)]
         start = _text.index(placeholder)
