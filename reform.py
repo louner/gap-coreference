@@ -50,7 +50,12 @@ def create_mention_index(x):
         return -1
     
 def create_cluster(x):
-    A_coref, A_mention, B_coref, B_mention, Pronoun_mention = x
+    if len(x) == 5:
+        A_coref, A_mention, B_coref, B_mention, Pronoun_mention = x
+    elif len(x) == 3:
+        A_mention, B_mention, Pronoun_mention = x
+        A_coref, B_coref = False, False
+
     true_mention = None
     if A_coref:
         return ((Pronoun_mention, A_mention), [(B_mention)])
@@ -60,7 +65,12 @@ def create_cluster(x):
         return ([(Pronoun_mention)], [(B_mention)], [(A_mention)])
 
 def create_cluster_index(x):
-    A_coref, A_mention, B_coref, B_mention, Pronoun_mention = x
+    if len(x) == 5:
+        A_coref, A_mention, B_coref, B_mention, Pronoun_mention = x
+    elif len(x) == 3:
+        A_mention, B_mention, Pronoun_mention = x
+        A_coref, B_coref = False, False
+
     true_mention = None
     if A_coref:
         return (0, 1, 2)
@@ -84,8 +94,8 @@ def reform_for_e2e_coref(filepath, training=True):
         df['clusters_index'] = df[['A-coref', 'A_mention', 'B-coref', 'B_mention', 'Pronoun_mention']].apply(create_cluster_index, axis=1)
         df['label'] = df[['A-coref', 'B-coref']].apply(lambda x: 0 if x[0] == True else 1 if x[1] == True else 2, axis=1)
     else:
-        df['clusters'] = [(())]*df.shape[0]
-        df['clusters_index'] = [(())]*df.shape[0]
+        df['clusters'] = df[['A_mention', 'B_mention', 'Pronoun_mention']].apply(create_cluster, axis=1)
+        df['clusters_index'] = df[['A_mention', 'B_mention', 'Pronoun_mention']].apply(create_cluster_index, axis=1)
         df['label'] = [0]*df.shape[0]
     
     reformed = pd.DataFrame()
