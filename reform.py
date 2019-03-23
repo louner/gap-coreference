@@ -13,7 +13,7 @@ from pdb import set_trace
 
 import nltk
 nltk.download("punkt")
-from nltk.tokenize import sent_tokenize, word_tokenize
+from nltk.tokenize import sent_tokenize
 
 import random
 import string
@@ -21,17 +21,40 @@ from time import time
 
 random.seed(1234)
 
+import tensorflow_hub as hub
+from bert import tokenization
+import tensorflow as tf
+BERT_MODEL_HUB = "https://tfhub.dev/google/bert_uncased_L-12_H-768_A-12/1"
+bert_module = hub.Module(
+  BERT_MODEL_HUB,
+  trainable=False)
+
+tokenization_info = bert_module(signature="tokenization_info", as_dict=True)
+with tf.Session() as sess:
+    vocab_file, do_lower_case = sess.run([tokenization_info["vocab_file"], tokenization_info["do_lower_case"]])
+tokenizer = tokenization.FullTokenizer(vocab_file=vocab_file, do_lower_case=do_lower_case)
+
+def word_tokenize(sentence):
+    return tokenizer.tokenize(sentence)
 
 def create_doc_key():
-    return 'nw%s'%(''.join(random.choices(string.ascii_uppercase + string.digits, k=32)))
+#    return 'nw%s'%(''.join(random.choices(string.ascii_uppercase + string.digits, k=32)))
+    return 'nw%s'%(''.join([random.choice(string.ascii_uppercase + string.digits) for _ in range(32)]))
 
 def preprocess(text):
     raw_sentences = sent_tokenize(text)
     sentences = [word_tokenize(s) for s in raw_sentences]
     speakers = [["spk%d"%(i) for _ in sentence] for i,sentence in enumerate(sentences)]
-    return sentences, speakers
 
-placeholder = 'AAAAAAAAA'
+    # bert inputs
+    input_ids = [tokenizer.convert_tokens_to_ids(tokens) for tokens in sentences]
+    input_mask = [[1]*len(input_id) for input_id in input_ids]
+    segment_ids = [[0]*len(input_id) for input_id in input_ids]
+
+    return sentences, speakers, input_ids, input_mask, segment_ids
+
+# bert tokenizer modifies tokens, so placeholder should be a token tokenizer won't modify
+placeholder = 'aaa'
 def create_mention_index(x):
     try:
         text, A, offset = x
@@ -84,10 +107,12 @@ def reform_for_e2e_coref(filepath, training=True):
     df['A_mention'] = df[['Text', 'A', 'A-offset']].apply(create_mention_index, axis=1)
     df['B_mention'] = df[['Text', 'B', 'B-offset']].apply(create_mention_index, axis=1)
     df['Pronoun_mention'] = df[['Text', 'Pronoun', 'Pronoun-offset']].apply(create_mention_index, axis=1)
-    
+   
+    print(df.shape)
     df = df[(df['Pronoun_mention'] != -1) & (df['A_mention'] != -1) & (df['B_mention'] != -1)]
+    print(df.shape)
     if training:
-        df['clusters'] = df[['A-coref', 'A_mention', 'B-coref', 'B_mention', 'Pronoun_mention']].apply(create_cluster, axis=1)
+        df['clusters'] = df[['A-coref', 'A_mention', 'B-coref', 'B_mention', 'Pronoun_mention']].apply(create_cluster, axis=1, raw=True)
         df['clusters_index'] = df[['A-coref', 'A_mention', 'B-coref', 'B_mention', 'Pronoun_mention']].apply(create_cluster_index, axis=1)
         df['label'] = df[['A-coref', 'B-coref']].apply(lambda x: 0 if x[0] == True else 1 if x[1] == True else 2, axis=1)
     else:
@@ -106,11 +131,16 @@ def reform_for_e2e_coref(filepath, training=True):
     reformed['doc_key'] = [create_doc_key() for _ in range(reformed.shape[0])]
     reformed['sentences'] = reformed['tmp'].apply(lambda x: x[0])
     reformed['speakers'] = reformed['tmp'].apply(lambda x: x[1])
+
+    reformed['input_ids'] = reformed['tmp'].apply(lambda x: x[2])
+    reformed['input_mask'] = reformed['tmp'].apply(lambda x: x[3])
+    reformed['segment_ids'] = reformed['tmp'].apply(lambda x: x[4])
+
     reformed['clusters'] = df['clusters']
     reformed['clusters_index'] = df['clusters_index']
     del reformed['tmp']
     
-    reformed.to_json(filepath.replace('tsv', 'json'), orient='records', lines=True)
+    reformed.to_json('bert-%s'%(filepath.replace('tsv', 'json')), orient='records', lines=True)
 # In[4]:
 
 
